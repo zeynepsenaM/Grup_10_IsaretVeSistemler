@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 1. Parametrelerin Belirlenmesi
 f0 = 59
 f1 = f0
 f2 = f0 / 2
@@ -49,4 +48,5 @@ axs[3].set_xlabel('Zaman (saniye)')
 axs[3].grid(True)
 
 plt.tight_layout()
+
 plt.show()
