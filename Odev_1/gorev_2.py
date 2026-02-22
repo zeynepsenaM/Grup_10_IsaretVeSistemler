@@ -11,7 +11,7 @@ plt.rcParams["font.serif"] = ["Times New Roman"]
 class DTMFKlavye:
     def __init__(self, root):
         self.root = root
-        self.root.title("DTMF Matris Klavyesi - Profesyonel Görünüm")
+        self.root.title("DTMF Matris Klavyesi")
         self.root.configure(bg='#f8f8f8', padx=20, pady=20)
 
         self.row_freqs = [697, 770, 852, 941]
