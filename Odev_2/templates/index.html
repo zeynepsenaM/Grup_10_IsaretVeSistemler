@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DTMF Magic Dashboard 🎀</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #ff99cc; --secondary: #b284be; --info: #87CEFA; }
+        body { font-family: 'Poppins', sans-serif; background: linear-gradient(135deg, #fff0f5 0%, #e6e6fa 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; margin: 0; padding: 20px; }
+        .card { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(15px); padding: 2.5rem; border-radius: 40px; box-shadow: 0 25px 50px rgba(0,0,0,0.1); width: 100%; max-width: 500px; text-align: center; border: 1px solid rgba(255,255,255,0.4); }
+        h1 { color: #8b008b; font-weight: 600; margin-bottom: 1.5rem; font-size: 1.8rem; }
+        input { width: 85%; padding: 15px; border-radius: 20px; border: 2px solid #ff99cc; outline: none; transition: 0.3s; margin-bottom: 15px; font-size: 1rem; }
+        .btn-group { display: flex; flex-direction: column; gap: 12px; }
+        button { padding: 14px; border-radius: 20px; border: none; color: white; font-weight: 600; cursor: pointer; transition: 0.3s; font-size: 1rem; }
+        button:hover { transform: translateY(-2px); opacity: 0.9; }
+        .btn-encode { background: var(--primary); }
+        .btn-decode { background: var(--secondary); }
+        .btn-graph { background: var(--info); }
+        #audioPlayer { width: 100%; margin-top: 20px; display: none; }
+        .status { margin-top: 20px; font-style: italic; color: #555; min-height: 25px; }
+        .chart-box { margin-top: 25px; display: none; background: white; border-radius: 20px; padding: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        #plotImg { width: 100%; border-radius: 15px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>✨ DTMF Analiz Paneli ✨</h1>
+        <input type="text" id="inputText" placeholder="Kodlanacak metni girin...">
+        <div class="btn-group">
+            <button class="btn-encode" onclick="encode()">1. Sesi Üret ve Çal 🎶</button>
+            <button class="btn-decode" onclick="decode()">2. Metne Dönüştür 🪄</button>
+            <button class="btn-graph" onclick="analyze()">3. Teknik Grafikleri Aç 📊</button>
+        </div>
+        <audio id="audioPlayer" controls></audio>
+        <div id="status" class="status">Sistem hazır 🌸</div>
+        <div id="chartBox" class="chart-box"><img id="plotImg" src="" alt="Teknik Analiz Grafikleri"></div>
+    </div>
+
+    <script>
+        async function encode() {
+            const text = document.getElementById('inputText').value;
+            const status = document.getElementById('status');
+            status.innerText = "İşleniyor... ✨";
+            const res = await fetch('/encode', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({text: text})
+            });
+            const data = await res.json();
+            if(data.status === 'success') {
+                const player = document.getElementById('audioPlayer');
+                player.src = data.audio_url + "?t=" + new Date().getTime();
+                player.style.display = 'block';
+                player.play();
+                status.innerText = "Ses başarıyla üretildi 💖";
+            } else { status.innerText = "Hata: " + data.message; }
+        }
+
+        async function decode() {
+            const status = document.getElementById('status');
+            status.innerText = "Analiz ediliyor... 🔍";
+            const res = await fetch('/decode', {method: 'POST'});
+            const data = await res.json();
+            status.innerHTML = data.status === 'success' ? `<b>Sonuç:</b> ${data.decoded} 🌟` : data.message;
+        }
+
+        async function analyze() {
+            const status = document.getElementById('status');
+            const plotImg = document.getElementById('plotImg');
+            const chartBox = document.getElementById('chartBox');
+            status.innerText = "Grafikler çiziliyor... 📈";
+            const res = await fetch('/analyze');
+            const data = await res.json();
+            if(data.status === 'success') {
+                plotImg.src = "data:image/png;base64," + data.plot;
+                chartBox.style.display = 'block';
+                status.innerText = "Analiz tamamlandı ✅";
+            } else { status.innerText = data.message; }
+        }
+    </script>
+</body>
+</html>
