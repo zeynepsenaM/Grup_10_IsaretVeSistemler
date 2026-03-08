@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title> Voice Lab 🎀 | BIL216</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #fff0f6; /* Pembemsi Arka Plan */
+            --card: #ffffff; 
+            --primary: #ff85c0; 
+            --primary-dark: #f759ab;
+            --success: #3fb950; 
+            --unvoiced: #f2cc60; 
+            --text: #595959;
+            --princess-shadow: 0 8px 24px rgba(255, 133, 192, 0.2);
+        }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); color: var(--text); padding: 25px; margin: 0; }
+        
+        .dashboard { 
+            max-width: 1400px; 
+            margin: 0 auto; 
+            display: grid; 
+            grid-template-columns: 350px 1fr; /* Boyutlar sabit */
+            gap: 25px; 
+        }
+
+        .control-panel { 
+            background: var(--card); 
+            border-radius: 24px; 
+            padding: 30px; 
+            box-shadow: var(--princess-shadow); 
+            border: 1px solid #ffdeeb; 
+            height: fit-content; 
+            position: sticky; 
+            top: 25px; 
+        }
+
+        h2 { color: var(--primary-dark); border-bottom: 2px solid #ffadd2; padding-bottom: 10px; margin-top: 0; }
+        
+        .audio-label { 
+            font-size: 11px; 
+            text-transform: uppercase; 
+            font-weight: 800; 
+            color: var(--primary-dark); 
+            margin-top: 15px; 
+            display: block; 
+        }
+
+        .select-box { 
+            width: 100%; 
+            padding: 10px; 
+            border: 2px solid #ffadd2; 
+            border-radius: 10px; 
+            margin-bottom: 10px; 
+            background: #fff;
+        }
+
+        .analyze-btn { 
+            width: 100%; 
+            padding: 15px; 
+            border-radius: 12px; 
+            border: none; 
+            background: linear-gradient(135deg, #ffadd2, #ff85c0); 
+            color: white; 
+            font-weight: bold; 
+            cursor: pointer; 
+            margin-top: 10px; 
+            transition: 0.3s;
+        }
+        .analyze-btn:hover { transform: scale(1.02); box-shadow: 0 5px 15px rgba(255, 133, 192, 0.4); }
+
+        .chart-container { 
+            background: var(--card); 
+            border-radius: 24px; 
+            padding: 20px; 
+            box-shadow: var(--princess-shadow); 
+            border: 1px solid #ffdeeb; 
+            margin-bottom: 20px; 
+            height: 260px; 
+        }
+
+        /* Oval ve Koyu Ses Oynatıcısı */
+        audio { 
+            width: 100%; 
+            filter: sepia(100%) saturate(200%) hue-rotate(290deg) brightness(0.8); 
+            border-radius: 50px; 
+            margin-top: 5px; 
+        }
+
+        .stat-card { 
+            background: #fff7fa; 
+            padding: 10px; 
+            border-radius: 10px; 
+            margin-top: 8px; 
+            border-left: 4px solid var(--primary); 
+        }
+        .stat-val { color: var(--primary-dark); font-size: 20px; font-weight: 800; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="control-panel">
+            <h2>Ses Analiz ✨</h2>
+            
+            <span class="audio-label">Ses Dosyası Seç</span>
+            <select id="fileSelect" class="select-box"></select>
+            
+            <span class="audio-label">Orijinal Kayıt 🎧</span>
+            <audio id="audioPlayer" controls></audio>
+            
+            <button id="runBtn" class="analyze-btn">Sihirli Analizi Başlat ✨</button>
+            
+            <div id="results" style="display:none">
+                <div class="stat-card"><small>Orijinal Süre</small><span id="origDur" class="stat-val"></span></div>
+                <div class="stat-card"><small>Sıkıştırma Oranı</small><span id="ratio" class="stat-val"></span></div>
+                <div class="stat-card"><small>Net Konuşma Süresi</small><span id="cleanDur" class="stat-val"></span></div>
+                
+                <div style="margin-top:20px; padding-top: 15px; border-top: 1px solid #ffdeeb;">
+                    <span class="audio-label" style="color:var(--primary-dark)">Temizlenmiş Kayıt 💖</span>
+                    <audio id="cleanAudioPlayer" controls></audio>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="chart-container"><canvas id="cRaw"></canvas></div>
+            <div class="chart-container"><canvas id="cVAD"></canvas></div>
+            <div class="chart-container"><canvas id="cE"></canvas></div>
+            <div class="chart-container"><canvas id="cZ"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        let charts = {};
+        const audio = document.getElementById('audioPlayer');
+        const cleanAudio = document.getElementById('cleanAudioPlayer');
+        const select = document.getElementById('fileSelect');
+
+        select.onchange = () => { audio.src = `/get_audio/${select.value}`; audio.load(); };
+
+        async function loadFiles() {
+            const res = await fetch('/list_files');
+            const files = await res.json();
+            select.innerHTML = '';
+            files.forEach(f => {
+                let opt = document.createElement('option'); opt.value = opt.innerHTML = f;
+                select.appendChild(opt);
+            });
+            if(files.length > 0) audio.src = `/get_audio/${files[0]}`;
+        }
+
+        const draw = (id, label, y, labels, color, type='line', bg=null) => {
+            if(charts[id]) charts[id].destroy();
+            charts[id] = new Chart(document.getElementById(id), {
+                type: type,
+                data: { 
+                    labels: labels, 
+                    datasets: [{ 
+                        label: label, 
+                        data: y, 
+                        borderColor: color, 
+                        backgroundColor: bg || 'rgba(0, 0, 0, 0.03)', 
+                        fill: true, 
+                        pointRadius: 0, 
+                        borderWidth: 2, 
+                        barPercentage: 1.0, 
+                        categoryPercentage: 1.0
+                    }]
+                },
+                options: { 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        title: { display: true, text: label, color: '#f759ab', font: {weight: 'bold', size: 14} }, 
+                        legend: { display: false } 
+                    }, 
+                    scales: { 
+                        x: { display: true, ticks: { color: '#ff85c0', maxTicksLimit: 12 } }, 
+                        y: { display: true, grid: { color: '#fff0f6' }, ticks: { color: '#ff85c0' } } 
+                    } 
+                }
+            });
+        };
+
+        document.getElementById('runBtn').onclick = async () => {
+            const res = await fetch(`/analyze/${select.value}`);
+            const data = await res.json();
+            document.getElementById('results').style.display = 'block';
+            
+            document.getElementById('origDur').innerText = data.orig_dur + " s";
+            document.getElementById('ratio').innerText = "%" + data.ratio;
+            document.getElementById('cleanDur').innerText = data.clean_dur + " s";
+
+            if(data.cleaned_file) {
+                cleanAudio.src = `/get_audio/${data.cleaned_file}?t=` + new Date().getTime();
+                cleanAudio.load();
+            }
+            
+            // GRAFİKLER (KONTRAS RENKLERLE)
+            
+            // 1. Orijinal Sinyal -> KOYU MOR
+            draw('cRaw', '1. ORİJİNAL SES SİNYALİ (ZAMAN DOMENİ) 🎀', data.raw_signal, data.raw_labels, '#6f42c1');
+            
+            // 2. VAD Maskesi -> Renkli Bloklar (Yeşil/Sarı/Gri)
+            draw('cVAD', '2. VAD & VOICED/UNVOICED MASKESİ 🎀', data.labels.map(()=>1), data.labels, null, 'bar', data.colors);
+            
+            // 3. Enerji Grafiği -> KOYU MAVİ
+            draw('cE', '3. KISA SÜRELİ ENERJİ (STE) 🎀', data.energies, data.labels, '#007bff');
+            
+            // 4. ZCR Grafiği -> KOYU KIRMIZI
+            draw('cZ', '4. SIFIR GEÇİŞ ORANI (ZCR) 🎀', data.zcrs, data.labels, '#dc3545');
+        };
+        window.onload = loadFiles;
+    </script>
+</body>
+</html>
