@@ -1,0 +1,96 @@
+import os
+import glob
+import numpy as np
+import pandas as pd
+import librosa
+
+# -----------------------------
+# OTOKORELASYON F0 HESABI
+# -----------------------------
+def autocorrelation_pitch(signal, sr):
+    corr = np.correlate(signal, signal, mode='full')
+    corr = corr[len(corr)//2:]
+
+    d = np.diff(corr)
+    start = np.where(d > 0)[0]
+
+    if len(start) == 0:
+        return 0
+
+    start = start[0]
+    peak = np.argmax(corr[start:]) + start
+
+    if peak == 0:
+        return 0
+
+    f0 = sr / peak
+    return f0
+
+# -----------------------------
+# SINIFLANDIRMA
+# -----------------------------
+def classify(f0):
+    if f0 == 0:
+        return "Bilinmiyor"
+    elif f0 < 180:
+        return "Erkek"
+    elif f0 < 255:
+        return "Kadın"
+    else:
+        return "Çocuk"
+
+# -----------------------------
+# DATASET OKUMA
+# -----------------------------
+excel_files = glob.glob("Dataset/**/Grup_*.xlsx", recursive=True)
+
+if len(excel_files) == 0:
+    print("Excel bulunamadı!")
+    exit()
+
+df = pd.concat([pd.read_excel(f) for f in excel_files])
+
+results = []
+
+# -----------------------------
+# SES DOSYALARINI İŞLE
+# -----------------------------
+for index, row in df.iterrows():
+    path = row['Dosya_Path']
+
+    if not os.path.exists(path):
+        continue
+
+    try:
+        audio, sr = librosa.load(path)
+
+        # ZCR
+        zcr = librosa.feature.zero_crossing_rate(audio)[0].mean()
+
+        # Enerji
+        energy = np.sum(audio**2) / len(audio)
+
+        # F0
+        f0 = autocorrelation_pitch(audio, sr)
+
+        tahmin = classify(f0)
+
+        results.append([f0, zcr, energy, tahmin, row['Cinsiyet']])
+
+    except:
+        continue
+
+# -----------------------------
+# SONUÇLAR
+# -----------------------------
+results_df = pd.DataFrame(results, columns=["F0", "ZCR", "Energy", "Tahmin", "Gerçek"])
+
+# Accuracy
+correct = (results_df["Tahmin"] == results_df["Gerçek"]).sum()
+accuracy = correct / len(results_df)
+
+print("\nToplam doğruluk:", accuracy)
+
+# İstatistik tablo
+print("\nSınıf Bazlı İstatistik:")
+print(results_df.groupby("Gerçek")["F0"].agg(["mean", "std", "count"]))
